@@ -1,0 +1,42 @@
+---
+- name: Create test system in vmware
+  hosts: localhost
+  tasks:
+
+    - name: fail if neither vcenter_hostname or VMWARE_HOST are defined
+      ansible.builtin.assert:
+        that:
+          - vcenter_hostname is defined
+            or lookup('ansible.builtin.env','VMWARE_HOST')|length > 0
+        # fail_msg: "vcenter_hostname and VMWARE_HOST are undefined"
+
+    - name: fail if neither vcenter_username or VMWARE_USER are defined
+      ansible.builtin.assert:
+        that:
+          - vcenter_username is defined
+            or lookup('ansible.builtin.env','VMWARE_USER')|length > 0
+        fail_msg: "vcenter_username and VMWARE_USER are undefined"
+
+    - name: fail if neither vcenter_password or VMWARE_PASSWORD are defined
+      ansible.builtin.assert:
+        that:
+          - vcenter_password is defined
+            or lookup('ansible.builtin.env','VMWARE_PASSWORD')|length > 0
+        fail_msg: "vcenter_password and VMWARE_PASSWORD are undefined"
+      no_log: True
+
+    - name: Deploy ansible-dev-node VM from template in content library
+      community.vmware.vmware_content_deploy_ovf_template:
+        hostname: '{{ vcenter_hostname | default(omit) }}'
+        username: '{{ vcenter_username | default(omit) }}'
+        password: '{{ vcenter_password | default(omit) }}'
+        template: rhel8-base
+        content_library: golden_images_library
+        datastore: 2TB_SSD_WDRed
+        folder: LabVMs
+        datacenter: "Homelab DC"
+        name: ansible-dev-node-01
+        # resource_pool: test_rp
+        cluster: Gen2
+        validate_certs: False
+      delegate_to: localhost

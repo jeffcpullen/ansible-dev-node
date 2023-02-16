@@ -1,0 +1,8 @@
+---
+# tasks file for ansible-dev-node
+
+- name: Install podman
+    package:
+      name: "podman"
+      state: present
+
