@@ -1,0 +1,43 @@
+- name: Add ssh key to new node
+  hosts: all
+  gather_facts: False
+  vars:
+    ansible_ssh_pass: "{{ lookup('ansible.builtin.env','DEV_NODE_SSH_PASS') | default(omit) }}"
+  tasks:
+
+    - name: Get OS details
+      ansible.builtin.setup:
+      when: ansible_ssh_pass is defined
+      delegate_to: localhost
+
+    - name: Check if sshpass is available
+      ansible.builtin.command: 'which sshpass'
+      register: __sshpass_exists
+      changed_when: __sshpass_exists.rc != 0
+      failed_when: False
+      delegate_to: localhost
+      when: 
+        - ansible_distribution == 'MacOSX'
+        - ansible_ssh_pass is defined
+
+    - name: Fail if sshpass is not available
+      ansible.builtin.fail:
+        msg: >
+              "go to https://sourceforge.net/projects/sshpass/ 
+              Download latest version and then tar xvzf it and 
+              finally cd to the dir where it got unpackedand install 
+              with: ./configure, make, make install"
+      delegate_to: localhost
+      when:
+        - ansible_ssh_pass is defined
+        - __sshpass_exists.rc != 0
+      delegate_to: localhost
+
+    - name: Ping test node
+      ansible.builtin.ping:
+
+    - name: Set authorized key taken from file
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"

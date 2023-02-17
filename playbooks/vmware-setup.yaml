@@ -1,6 +1,9 @@
 ---
 - name: Create test system in vmware
   hosts: localhost
+  vars:
+    node_name: 'ansible-dev-node-01'
+    node_username: "{{ lookup('ansible.builtin.env','DEV_NODE_SSH_USER') | default(omit) }}"
   tasks:
 
     - name: fail if neither vcenter_hostname or VMWARE_HOST are defined
@@ -8,7 +11,6 @@
         that:
           - vcenter_hostname is defined
             or lookup('ansible.builtin.env','VMWARE_HOST')|length > 0
-        # fail_msg: "vcenter_hostname and VMWARE_HOST are undefined"
 
     - name: fail if neither vcenter_username or VMWARE_USER are defined
       ansible.builtin.assert:
@@ -35,8 +37,54 @@
         datastore: 2TB_SSD_WDRed
         folder: LabVMs
         datacenter: "Homelab DC"
-        name: ansible-dev-node-01
+        name: "{{ node_name }}"
         # resource_pool: test_rp
         cluster: Gen2
         validate_certs: False
+      delegate_to: localhost
+      register: __deploy_ovf_results
+      failed_when:
+        - "'already Exists' not in __deploy_ovf_results.vm_deploy_info.msg"
+        - "'Deployed Virtual Machine' not in __deploy_ovf_results.vm_deploy_info.msg"
+      changed_when:
+        - "'already Exists' not in __deploy_ovf_results.vm_deploy_info.msg"
+
+    - name: Start VM
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname | default(omit) }}"
+        username: "{{ vcenter_username | default(omit) }}"
+        password: "{{ vcenter_password | default(omit) }}"
+        name: "{{ node_name }}"
+        state: poweredon
+        validate_certs: False
+        wait_for_ip_address: True
+      delegate_to: localhost
+      register: __started_host
+
+    - name: Debug vm vm
+      ansible.builtin.debug:
+        var: __started_host
+      delegate_to: localhost
+
+    - name: Remove old inventory files
+      ansible.builtin.file:
+        path: '/tmp/ansible-dev-node-hosts'
+        state: absent
+
+    - name: Create basic inventory file
+      ansible.builtin.lineinfile:
+        state: present
+        create: True
+        line: "{{ __started_host.instance.ipv4 }} ansible_ssh_user={{ node_username }}"
+        mode: 0644
+        path: '/tmp/ansible-dev-node-hosts'
+      delegate_to: localhost
+
+    - name: Add vm to inventory file
+      ansible.builtin.add_host:
+        name: "{{ __started_host.instance.ipv4 }}"
+        groups: ansible_dev_node
+        provider: vmware
+        ansible_user: "{{ node_username }}"
+        inventory_dir: "./inventory"
       delegate_to: localhost

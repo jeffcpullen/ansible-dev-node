@@ -1,0 +1,37 @@
+---
+- name: Create test system in vmware
+  hosts: localhost
+  tasks:
+
+    - name: fail if neither vcenter_hostname or VMWARE_HOST are defined
+      ansible.builtin.assert:
+        that:
+          - vcenter_hostname is defined
+            or lookup('ansible.builtin.env','VMWARE_HOST')|length > 0
+        # fail_msg: "vcenter_hostname and VMWARE_HOST are undefined"
+
+    - name: fail if neither vcenter_username or VMWARE_USER are defined
+      ansible.builtin.assert:
+        that:
+          - vcenter_username is defined
+            or lookup('ansible.builtin.env','VMWARE_USER')|length > 0
+        fail_msg: "vcenter_username and VMWARE_USER are undefined"
+
+    - name: fail if neither vcenter_password or VMWARE_PASSWORD are defined
+      ansible.builtin.assert:
+        that:
+          - vcenter_password is defined
+            or lookup('ansible.builtin.env','VMWARE_PASSWORD')|length > 0
+        fail_msg: "vcenter_password and VMWARE_PASSWORD are undefined"
+      no_log: True
+
+    - name: Stop and remove VM
+      community.vmware.vmware_guest:
+        hostname: "{{ vcenter_hostname | default(omit) }}"
+        username: "{{ vcenter_username | default(omit) }}"
+        password: "{{ vcenter_password | default(omit) }}"
+        name: ansible-dev-node-01
+        state: absent
+        force: True
+        validate_certs: False
+      delegate_to: localhost
